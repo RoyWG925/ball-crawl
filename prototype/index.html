@@ -1,0 +1,907 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>Ball Crawl — Prototype</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  background: #06060c;
+  color: #e2e8f0;
+  font-family: 'Courier New', monospace;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-height: 100vh;
+  padding: 20px;
+  user-select: none;
+}
+
+/* --- Header --- */
+.header {
+  text-align: center;
+  margin-bottom: 16px;
+}
+.header h1 {
+  font-size: 32px;
+  letter-spacing: 8px;
+  background: linear-gradient(90deg, #ec4899, #8b5cf6, #06b6d4);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.header .sub { color: #4b5563; font-size: 12px; margin-top: 4px; }
+
+/* --- Status Bar --- */
+.status-bar {
+  display: flex;
+  gap: 32px;
+  background: #0f1119;
+  border: 1px solid #1e293b;
+  border-radius: 12px;
+  padding: 12px 32px;
+  margin-bottom: 16px;
+}
+.stat { text-align: center; }
+.stat .label { font-size: 10px; color: #4b5563; letter-spacing: 2px; }
+.stat .value { font-size: 22px; font-weight: bold; }
+.stat .value.cyan { color: #06b6d4; }
+.stat .value.yellow { color: #eab308; }
+.stat .value.pink { color: #ec4899; }
+.stat .value.red { color: #ef4444; }
+
+/* --- Game Container --- */
+.game-container {
+  position: relative;
+  margin-bottom: 16px;
+}
+
+/* --- Board Ring Tiles --- */
+.tile {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border: 2px solid #1e293b;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  font-weight: bold;
+  letter-spacing: 1px;
+  background: #0d1117;
+  transition: all 0.3s;
+  z-index: 2;
+}
+.tile .tile-label { font-size: 7px; opacity: 0.8; }
+.tile .tile-idx { font-size: 6px; opacity: 0.3; margin-top: 1px; }
+.tile.t-normal { border-color: #1e293b; color: #374151; }
+.tile.t-start  { border-color: #22c55e; color: #22c55e; text-shadow: 0 0 6px #22c55e; }
+.tile.t-surge  { border-color: #6366f1; color: #6366f1; text-shadow: 0 0 6px #6366f1; }
+.tile.t-event  { border-color: #a855f7; color: #a855f7; text-shadow: 0 0 6px #a855f7; }
+.tile.active {
+  box-shadow: 0 0 12px currentColor, inset 0 0 8px rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  transform: scale(1.1);
+  z-index: 3;
+}
+.player-token {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #fbbf24;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px #fbbf24;
+  z-index: 4;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* --- Canvas --- */
+#field {
+  display: block;
+  border-radius: 8px;
+  cursor: crosshair;
+}
+
+/* --- Controls --- */
+.controls {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  min-height: 100px;
+}
+.dice-display {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.die {
+  width: 48px;
+  height: 48px;
+  background: #fff;
+  color: #000;
+  font-size: 24px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);
+}
+.die-plus { color: #4b5563; font-size: 20px; }
+.btn-row { display: flex; gap: 12px; }
+.btn {
+  padding: 12px 28px;
+  border: 2px solid;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.2s;
+  letter-spacing: 1px;
+}
+.btn:hover { transform: scale(1.05); }
+.btn:active { transform: scale(0.95); }
+.btn-primary {
+  border-color: #ec4899;
+  color: #ec4899;
+  box-shadow: 0 0 15px rgba(236,72,153,0.3);
+}
+.btn-primary:hover { background: rgba(236,72,153,0.15); }
+.btn-cyan {
+  border-color: #06b6d4;
+  color: #06b6d4;
+  box-shadow: 0 0 10px rgba(6,182,212,0.2);
+}
+.btn-cyan:hover { background: rgba(6,182,212,0.15); }
+.btn-purple {
+  border-color: #a855f7;
+  color: #a855f7;
+  box-shadow: 0 0 10px rgba(168,85,247,0.2);
+}
+.btn-purple:hover { background: rgba(168,85,247,0.15); }
+.message {
+  font-size: 14px;
+  color: #9ca3af;
+  text-align: center;
+  min-height: 20px;
+}
+.message.glow { color: #06b6d4; text-shadow: 0 0 8px #06b6d4; }
+
+/* --- Game Over Overlay --- */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.overlay h2 {
+  font-size: 48px;
+  color: #ef4444;
+  text-shadow: 0 0 30px #ef4444;
+  letter-spacing: 6px;
+  margin-bottom: 16px;
+}
+.overlay p { color: #9ca3af; margin-bottom: 24px; }
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>BALL CRAWL</h1>
+  <div class="sub">Prototype: 走格 x 物理彈珠</div>
+</div>
+
+<div class="status-bar">
+  <div class="stat"><div class="label">TURN</div><div class="value cyan" id="s-turn">1</div></div>
+  <div class="stat"><div class="label">BALLS</div><div class="value pink" id="s-balls">0</div></div>
+  <div class="stat"><div class="label">MONSTERS</div><div class="value" id="s-monsters">0</div></div>
+  <div class="stat"><div class="label">DANGER</div><div class="value" id="s-danger">0/10</div></div>
+</div>
+
+<div class="game-container" id="game-container">
+  <canvas id="field"></canvas>
+  <div id="player-token" class="player-token"></div>
+</div>
+
+<div class="controls" id="controls">
+  <div class="message" id="message">Press ROLL to begin</div>
+</div>
+
+<div class="overlay hidden" id="overlay">
+  <h2>SYSTEM FAILURE</h2>
+  <p id="overlay-msg">Too many monsters on the field.</p>
+  <button class="btn btn-cyan" onclick="location.reload()">REBOOT</button>
+</div>
+
+<script>
+// ============================================================
+// CONFIG
+// ============================================================
+const CW = 640, CH = 480;               // canvas size
+const TILE_SIZE = 40, TILE_GAP = 6;     // ring tile size + gap from canvas
+const TILE_COUNT = 24;                   // tiles on ring
+const TOP_N = 8, RIGHT_N = 4, BOTTOM_N = 8, LEFT_N = 4;
+
+const BALL_R = 7;
+const MONSTER_R = 16;
+const MAX_MONSTERS = 10;
+const MONSTERS_PER_WAVE = 3;
+const BALLS_PER_TURN = 2;
+const LAUNCH_SPEED = 10;
+const BOUNCE = 0.92;
+const BALL_DAMP = 0.998;        // per-frame multiplier while flying
+const SETTLED_DAMP = 0.96;      // per-frame multiplier after settled
+const SETTLE_SPEED = 0.8;       // speed threshold to settle
+const SETTLE_DELAY = 0.3;       // seconds below threshold
+const MAX_FLIGHT = 8;           // force settle after N seconds
+
+// ============================================================
+// STATE
+// ============================================================
+const state = {
+  phase: 'ROLL',  // ROLL, CHOOSE, MOVING, SHOOT, RESOLVE, GAMEOVER
+  turn: 1,
+  playerPos: 0,
+  dice: [0, 0],
+  ballsThisTurn: BALLS_PER_TURN,
+  ballsShot: 0,
+  activeBall: null,  // the ball currently being aimed/in-flight
+};
+
+let balls = [];
+let monsters = [];
+let particles = [];
+let tiles = [];
+
+// drag state
+let dragging = false;
+let dragStart = { x: 0, y: 0 };
+let dragCurrent = { x: 0, y: 0 };
+const launchPoint = { x: CW / 2, y: CH - 30 };
+
+// ============================================================
+// DOM
+// ============================================================
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+canvas.width = CW;
+canvas.height = CH;
+
+const container = document.getElementById('game-container');
+const controlsEl = document.getElementById('controls');
+const messageEl = document.getElementById('message');
+const tokenEl = document.getElementById('player-token');
+
+// ============================================================
+// TILE SETUP
+// ============================================================
+const TILE_TYPES = {
+  NORMAL: { id: 'normal', label: '', cls: 't-normal' },
+  START:  { id: 'start',  label: 'START', cls: 't-start' },
+  SURGE:  { id: 'surge',  label: 'SURGE', cls: 't-surge' },
+  EVENT:  { id: 'event',  label: 'EVENT', cls: 't-event' },
+};
+
+function initTiles() {
+  const margin = TILE_SIZE + TILE_GAP;
+  container.style.width = (CW + margin * 2) + 'px';
+  container.style.height = (CH + margin * 2) + 'px';
+  canvas.style.position = 'absolute';
+  canvas.style.left = margin + 'px';
+  canvas.style.top = margin + 'px';
+
+  for (let i = 0; i < TILE_COUNT; i++) {
+    let type = TILE_TYPES.NORMAL;
+    if (i === 0) type = TILE_TYPES.START;
+    else if (i === 6 || i === 18) type = TILE_TYPES.SURGE;
+    else if (i === 4 || i === 10 || i === 16 || i === 22) type = TILE_TYPES.EVENT;
+
+    const pos = getTilePos(i, margin);
+    const el = document.createElement('div');
+    el.className = 'tile ' + type.cls;
+    el.style.left = pos.x + 'px';
+    el.style.top = pos.y + 'px';
+    el.innerHTML = `<span class="tile-label">${type.label}</span>`;
+    container.appendChild(el);
+
+    tiles.push({ type, el, cx: pos.x + TILE_SIZE / 2, cy: pos.y + TILE_SIZE / 2 });
+  }
+  updatePlayerToken();
+}
+
+function getTilePos(i, margin) {
+  const ts = TILE_SIZE;
+  if (i < TOP_N) {
+    const step = CW / TOP_N;
+    return { x: margin + i * step + (step - ts) / 2, y: (margin - ts) / 2 };
+  } else if (i < TOP_N + RIGHT_N) {
+    const j = i - TOP_N;
+    const step = CH / RIGHT_N;
+    return { x: margin + CW + (margin - ts) / 2, y: margin + j * step + (step - ts) / 2 };
+  } else if (i < TOP_N + RIGHT_N + BOTTOM_N) {
+    const j = i - TOP_N - RIGHT_N;
+    const step = CW / BOTTOM_N;
+    return { x: margin + CW - (j + 1) * step + (step - ts) / 2, y: margin + CH + (margin - ts) / 2 };
+  } else {
+    const j = i - TOP_N - RIGHT_N - BOTTOM_N;
+    const step = CH / LEFT_N;
+    return { x: (margin - ts) / 2, y: margin + CH - (j + 1) * step + (step - ts) / 2 };
+  }
+}
+
+function updatePlayerToken() {
+  const t = tiles[state.playerPos];
+  tokenEl.style.left = (t.cx - 7) + 'px';
+  tokenEl.style.top = (t.cy - 7) + 'px';
+  tiles.forEach((tile, i) => {
+    tile.el.classList.toggle('active', i === state.playerPos);
+  });
+}
+
+// ============================================================
+// BOARD LOGIC
+// ============================================================
+function rollDice() {
+  state.dice = [1 + Math.floor(Math.random() * 6), 1 + Math.floor(Math.random() * 6)];
+}
+
+function movePlayer(steps) {
+  const visited = [];
+  for (let s = 0; s < steps; s++) {
+    state.playerPos = (state.playerPos + 1) % TILE_COUNT;
+    visited.push(state.playerPos);
+  }
+  return visited;
+}
+
+function processTileLanding(idx) {
+  const tile = tiles[idx];
+  switch (tile.type.id) {
+    case 'start':
+      setMessage('START! Bonus ball!', true);
+      state.ballsThisTurn++;
+      break;
+    case 'surge':
+      setMessage('SURGE! Field chaos!', true);
+      surgeBalls();
+      break;
+    case 'event':
+      const r = Math.random();
+      if (r < 0.5) {
+        setMessage('EVENT: +1 Ball!', true);
+        state.ballsThisTurn++;
+      } else {
+        setMessage('EVENT: Extra monsters!', true);
+        spawnMonsters(2);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
+function surgeBalls() {
+  balls.forEach(b => {
+    if (b.settled) {
+      b.settled = false;
+      b.settleTimer = 0;
+      b.flightTimer = 0;
+      b.damp = BALL_DAMP;
+    }
+    const angle = Math.random() * Math.PI * 2;
+    const force = 3 + Math.random() * 5;
+    b.vx += Math.cos(angle) * force;
+    b.vy += Math.sin(angle) * force;
+  });
+}
+
+// ============================================================
+// MONSTERS
+// ============================================================
+function spawnMonsters(count) {
+  for (let i = 0; i < count; i++) {
+    if (monsters.length >= MAX_MONSTERS) break;
+    let x, y, valid;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      x = MONSTER_R + 20 + Math.random() * (CW - MONSTER_R * 2 - 40);
+      y = MONSTER_R + 20 + Math.random() * (CH - MONSTER_R * 2 - 80);
+      valid = true;
+      for (const m of monsters) {
+        const dx = x - m.x, dy = y - m.y;
+        if (Math.sqrt(dx*dx + dy*dy) < MONSTER_R * 3) { valid = false; break; }
+      }
+      if (valid) break;
+    }
+    monsters.push({ x, y, r: MONSTER_R, hp: 2 + Math.floor(state.turn / 3), maxHp: 2 + Math.floor(state.turn / 3) });
+  }
+}
+
+// ============================================================
+// BALL PHYSICS
+// ============================================================
+function createBall(x, y, vx, vy) {
+  return {
+    x, y, vx, vy,
+    r: BALL_R,
+    launched: true,
+    settled: false,
+    settleTimer: 0,
+    flightTimer: 0,
+    damp: BALL_DAMP,
+    trail: [],
+  };
+}
+
+function updatePhysics(dt) {
+  // Update balls
+  for (const b of balls) {
+    // Trail
+    if (Math.abs(b.vx) > 0.5 || Math.abs(b.vy) > 0.5) {
+      b.trail.push({ x: b.x, y: b.y, life: 1 });
+    }
+    if (b.trail.length > 12) b.trail.shift();
+    b.trail.forEach(t => t.life -= 0.08);
+    b.trail = b.trail.filter(t => t.life > 0);
+
+    // Damping
+    b.vx *= b.damp;
+    b.vy *= b.damp;
+
+    // Move
+    b.x += b.vx;
+    b.y += b.vy;
+
+    // Wall bounce
+    if (b.x - b.r < 0)  { b.x = b.r;      b.vx = Math.abs(b.vx) * BOUNCE; }
+    if (b.x + b.r > CW) { b.x = CW - b.r; b.vx = -Math.abs(b.vx) * BOUNCE; }
+    if (b.y - b.r < 0)  { b.y = b.r;      b.vy = Math.abs(b.vy) * BOUNCE; }
+    if (b.y + b.r > CH) { b.y = CH - b.r; b.vy = -Math.abs(b.vy) * BOUNCE; }
+
+    // Monster collision
+    for (let mi = monsters.length - 1; mi >= 0; mi--) {
+      const m = monsters[mi];
+      const dx = b.x - m.x, dy = b.y - m.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const minD = b.r + m.r;
+      if (dist < minD && dist > 0.01) {
+        const nx = dx / dist, ny = dy / dist;
+        const dot = b.vx * nx + b.vy * ny;
+        if (dot < 0) {
+          b.vx -= (1 + BOUNCE) * dot * nx;
+          b.vy -= (1 + BOUNCE) * dot * ny;
+          m.hp--;
+          spawnParticles(m.x + nx * m.r, m.y + ny * m.r, 6);
+          if (m.hp <= 0) {
+            spawnParticles(m.x, m.y, 15);
+            monsters.splice(mi, 1);
+          }
+        }
+        const overlap = minD - dist;
+        b.x += nx * overlap;
+        b.y += ny * overlap;
+      }
+    }
+
+    // Settle check
+    if (b.launched && !b.settled) {
+      b.flightTimer += dt;
+      const speed = Math.sqrt(b.vx * b.vx + b.vy * b.vy);
+      if (speed < SETTLE_SPEED) {
+        b.settleTimer += dt;
+        if (b.settleTimer >= SETTLE_DELAY) doSettle(b);
+      } else {
+        b.settleTimer = 0;
+      }
+      if (b.flightTimer >= MAX_FLIGHT) doSettle(b);
+    }
+  }
+
+  // Ball-ball collision
+  for (let i = 0; i < balls.length; i++) {
+    for (let j = i + 1; j < balls.length; j++) {
+      ballBallCollide(balls[i], balls[j]);
+    }
+  }
+
+  // Particles
+  particles.forEach(p => {
+    p.x += p.vx; p.y += p.vy;
+    p.vx *= 0.96; p.vy *= 0.96;
+    p.life -= 0.04;
+  });
+  particles = particles.filter(p => p.life > 0);
+}
+
+function doSettle(b) {
+  b.settled = true;
+  b.vx = 0;
+  b.vy = 0;
+  b.damp = SETTLED_DAMP;
+  // Notify game flow
+  if (b === state.activeBall) {
+    state.activeBall = null;
+    state.ballsShot++;
+    setTimeout(nextShot, 300);
+  }
+}
+
+function ballBallCollide(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  const minD = a.r + b.r;
+  if (dist < minD && dist > 0.01) {
+    const nx = dx / dist, ny = dy / dist;
+    const dvx = a.vx - b.vx, dvy = a.vy - b.vy;
+    const dvn = dvx * nx + dvy * ny;
+    if (dvn > 0) {
+      a.vx -= dvn * nx * 0.9;
+      a.vy -= dvn * ny * 0.9;
+      b.vx += dvn * nx * 0.9;
+      b.vy += dvn * ny * 0.9;
+      // Unsettle if hit hard
+      if (b.settled && Math.sqrt(b.vx*b.vx+b.vy*b.vy) > 2) {
+        b.settled = false;
+        b.settleTimer = 0;
+        b.flightTimer = 0;
+        b.damp = BALL_DAMP;
+      }
+      if (a.settled && Math.sqrt(a.vx*a.vx+a.vy*a.vy) > 2) {
+        a.settled = false;
+        a.settleTimer = 0;
+        a.flightTimer = 0;
+        a.damp = BALL_DAMP;
+      }
+    }
+    const overlap = minD - dist;
+    a.x -= nx * overlap / 2;
+    a.y -= ny * overlap / 2;
+    b.x += nx * overlap / 2;
+    b.y += ny * overlap / 2;
+  }
+}
+
+function spawnParticles(x, y, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 1 + Math.random() * 4;
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      life: 1,
+      color: Math.random() > 0.5 ? '#06b6d4' : '#ec4899',
+    });
+  }
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function render() {
+  ctx.clearRect(0, 0, CW, CH);
+
+  // Background
+  ctx.fillStyle = '#080810';
+  ctx.fillRect(0, 0, CW, CH);
+
+  // Grid
+  ctx.strokeStyle = '#0f1225';
+  ctx.lineWidth = 1;
+  for (let x = 0; x < CW; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, CH); ctx.stroke(); }
+  for (let y = 0; y < CH; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(CW, y); ctx.stroke(); }
+
+  // Border glow
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, CW - 2, CH - 2);
+
+  // Monsters
+  monsters.forEach(m => {
+    const hpRatio = m.hp / m.maxHp;
+    ctx.save();
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#06b6d4';
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.r, 0, Math.PI * 2);
+    ctx.fillStyle = '#0a0f1a';
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = `rgba(6, 182, 212, ${0.4 + hpRatio * 0.6})`;
+    ctx.stroke();
+    ctx.restore();
+    // HP
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 12px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(m.hp, m.x, m.y);
+  });
+
+  // Ball trails
+  balls.forEach(b => {
+    b.trail.forEach(t => {
+      ctx.beginPath();
+      ctx.arc(t.x, t.y, b.r * t.life * 0.6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(236, 72, 153, ${t.life * 0.3})`;
+      ctx.fill();
+    });
+  });
+
+  // Balls
+  balls.forEach(b => {
+    ctx.save();
+    ctx.shadowBlur = b.settled ? 6 : 15;
+    ctx.shadowColor = '#ec4899';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fillStyle = b.settled ? '#be185d' : '#f472b6';
+    ctx.fill();
+    ctx.restore();
+    // Settled indicator ring
+    if (b.settled) {
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 3, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(236, 72, 153, 0.3)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+  });
+
+  // Particles
+  particles.forEach(p => {
+    ctx.fillStyle = p.color.replace(')', `, ${p.life})`).replace('rgb', 'rgba').replace('#', '');
+    // Simple hex→rgba
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x - 1.5, p.y - 1.5, 3, 3);
+    ctx.globalAlpha = 1;
+  });
+
+  // Trajectory preview
+  if (dragging && state.phase === 'SHOOT') {
+    const dx = dragStart.x - dragCurrent.x;
+    const dy = dragStart.y - dragCurrent.y;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len > 5) {
+      const nx = dx / len, ny = dy / len;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(244, 114, 182, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 6]);
+      ctx.beginPath();
+      ctx.moveTo(launchPoint.x, launchPoint.y);
+      const previewLen = Math.min(len * 2, 300);
+      ctx.lineTo(launchPoint.x + nx * previewLen, launchPoint.y + ny * previewLen);
+      ctx.stroke();
+      ctx.restore();
+    }
+  }
+
+  // Launch point indicator
+  if (state.phase === 'SHOOT' && !state.activeBall) {
+    const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 200);
+    ctx.save();
+    ctx.shadowBlur = 10 * pulse;
+    ctx.shadowColor = '#ec4899';
+    ctx.beginPath();
+    ctx.arc(launchPoint.x, launchPoint.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(236, 72, 153, ${0.3 + pulse * 0.4})`;
+    ctx.fill();
+    ctx.strokeStyle = '#ec4899';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+canvas.addEventListener('mousedown', e => {
+  if (state.phase !== 'SHOOT' || state.activeBall) return;
+  const rect = canvas.getBoundingClientRect();
+  dragStart.x = e.clientX - rect.left;
+  dragStart.y = e.clientY - rect.top;
+  dragCurrent.x = dragStart.x;
+  dragCurrent.y = dragStart.y;
+  dragging = true;
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) return;
+  const rect = canvas.getBoundingClientRect();
+  dragCurrent.x = e.clientX - rect.left;
+  dragCurrent.y = e.clientY - rect.top;
+});
+
+canvas.addEventListener('mouseup', e => {
+  if (!dragging) return;
+  dragging = false;
+  const dx = dragStart.x - dragCurrent.x;
+  const dy = dragStart.y - dragCurrent.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 10) return; // too short
+  const nx = dx / len, ny = dy / len;
+  launchBall(nx * LAUNCH_SPEED, ny * LAUNCH_SPEED);
+});
+
+canvas.addEventListener('mouseleave', () => { dragging = false; });
+
+function launchBall(vx, vy) {
+  const b = createBall(launchPoint.x, launchPoint.y, vx, vy);
+  balls.push(b);
+  state.activeBall = b;
+}
+
+// ============================================================
+// GAME FLOW
+// ============================================================
+function setMessage(text, glow) {
+  messageEl.textContent = text;
+  messageEl.className = 'message' + (glow ? ' glow' : '');
+}
+
+function setControls(html) {
+  const msg = messageEl.textContent;
+  controlsEl.innerHTML = `<div class="message${messageEl.className.includes('glow')?' glow':''}" id="message">${msg}</div>` + html;
+  // Rebind messageEl
+}
+
+function updateStatus() {
+  document.getElementById('s-turn').textContent = state.turn;
+  document.getElementById('s-balls').textContent = (state.ballsThisTurn - state.ballsShot);
+  document.getElementById('s-monsters').textContent = monsters.length;
+  const dangerEl = document.getElementById('s-danger');
+  dangerEl.textContent = monsters.length + '/' + MAX_MONSTERS;
+  dangerEl.className = 'value ' + (monsters.length >= 8 ? 'red' : monsters.length >= 5 ? 'yellow' : 'cyan');
+}
+
+function startRollPhase() {
+  state.phase = 'ROLL';
+  state.ballsThisTurn = BALLS_PER_TURN;
+  state.ballsShot = 0;
+  state.activeBall = null;
+  setMessage('Roll the dice!');
+  controlsEl.innerHTML = `
+    <div class="message" id="message">Roll the dice!</div>
+    <button class="btn btn-primary" onclick="doRoll()">ROLL DICE (擲骰)</button>
+  `;
+  updateStatus();
+}
+
+function doRoll() {
+  rollDice();
+  state.phase = 'CHOOSE';
+  const [d1, d2] = state.dice;
+  controlsEl.innerHTML = `
+    <div class="message glow" id="message">Choose how to move</div>
+    <div class="dice-display">
+      <div class="die">${d1}</div>
+      <span class="die-plus">+</span>
+      <div class="die">${d2}</div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-cyan" onclick="doMove('combined')">
+        整步 → ${d1 + d2} 格
+      </button>
+      <button class="btn btn-purple" onclick="doMove('split')">
+        拆步 → ${d1} 再 ${d2}
+      </button>
+    </div>
+  `;
+}
+
+function doMove(type) {
+  state.phase = 'MOVING';
+  const [d1, d2] = state.dice;
+
+  if (type === 'combined') {
+    const visited = movePlayer(d1 + d2);
+    animateMovement(visited, () => {
+      processTileLanding(state.playerPos);
+      startShootPhase();
+    });
+  } else {
+    const visited1 = movePlayer(d1);
+    animateMovement(visited1, () => {
+      processTileLanding(state.playerPos);
+      setTimeout(() => {
+        const visited2 = movePlayer(d2);
+        animateMovement(visited2, () => {
+          processTileLanding(state.playerPos);
+          startShootPhase();
+        });
+      }, 400);
+    });
+  }
+}
+
+function animateMovement(visited, callback) {
+  let i = 0;
+  function step() {
+    if (i >= visited.length) { callback(); return; }
+    state.playerPos = visited[i];
+    updatePlayerToken();
+    i++;
+    setTimeout(step, 120);
+  }
+  step();
+}
+
+function startShootPhase() {
+  state.phase = 'SHOOT';
+  spawnMonsters(MONSTERS_PER_WAVE);
+  updateStatus();
+
+  if (monsters.length >= MAX_MONSTERS) {
+    gameOver();
+    return;
+  }
+
+  controlsEl.innerHTML = `<div class="message glow" id="message">Drag on field to aim, release to fire! (${state.ballsThisTurn - state.ballsShot} balls left)</div>`;
+}
+
+function nextShot() {
+  updateStatus();
+  if (state.ballsShot >= state.ballsThisTurn) {
+    resolvePhase();
+    return;
+  }
+  controlsEl.innerHTML = `<div class="message glow" id="message">Ball ${state.ballsShot + 1}/${state.ballsThisTurn} — Drag to aim!</div>`;
+}
+
+function resolvePhase() {
+  state.phase = 'RESOLVE';
+  updateStatus();
+
+  if (monsters.length >= MAX_MONSTERS) {
+    gameOver();
+    return;
+  }
+
+  controlsEl.innerHTML = `<div class="message" id="message">Turn ${state.turn} complete. Resolving...</div>`;
+  setTimeout(() => {
+    state.turn++;
+    startRollPhase();
+  }, 800);
+}
+
+function gameOver() {
+  state.phase = 'GAMEOVER';
+  document.getElementById('overlay').classList.remove('hidden');
+}
+
+// ============================================================
+// GAME LOOP
+// ============================================================
+let lastTime = 0;
+function gameLoop(timestamp) {
+  const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
+  lastTime = timestamp;
+
+  updatePhysics(dt);
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+// ============================================================
+// INIT
+// ============================================================
+initTiles();
+startRollPhase();
+requestAnimationFrame(gameLoop);
+</script>
+
+</body>
+</html>
